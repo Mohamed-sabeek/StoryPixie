@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import StoryViewer from '../components/StoryViewer';
+import DownloadStoryActions from '../components/DownloadStoryActions';
 import { useStoryHistory, SavedStory } from '../hooks/useStoryHistory';
 
 export default function HistoryPage() {
@@ -32,6 +33,7 @@ export default function HistoryPage() {
               Back to History
             </button>
             <StoryViewer story={selectedStory} />
+            <DownloadStoryActions story={selectedStory} />
           </div>
         ) : (
           <div>

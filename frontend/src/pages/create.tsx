@@ -8,6 +8,7 @@ import StoryViewer from '../components/StoryViewer';
 import { Story } from '../components/StoryViewer';
 import { generateStory } from '../services/api';
 import { useStoryHistory } from '../hooks/useStoryHistory';
+import DownloadStoryActions from '../components/DownloadStoryActions';
 
 export default function CreateStory() {
   const router = useRouter();
@@ -80,6 +81,7 @@ export default function CreateStory() {
         {story && (
           <div className="w-full flex flex-col items-center">
             <StoryViewer story={story} />
+            <DownloadStoryActions story={story} />
             <div className="mt-12 flex gap-4">
               <button 
                 onClick={() => setStory(null)} 
