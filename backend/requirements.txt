@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+google-generativeai
+google-cloud-texttospeech
+google-cloud-storage
+moviepy
+pydantic
+python-dotenv
+axios
