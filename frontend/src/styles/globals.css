@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dark Mode Theme */
+  --color-dark-bg: #0B0C10;
+  --color-dark-surface: #1F2833;
+  --color-dark-text: #C5C6C7;
+  --color-dark-primary: #66FCF1;
+  --color-dark-secondary: #45A29E;
+
+  /* Light Mode Theme */
+  --color-light-bg: #F9FAFB;
+  --color-light-surface: #FFFFFF;
+  --color-light-text: #111827;
+  --color-light-primary: #3B82F6;
+
+  /* Custom Animations */
+  --animate-fade-in: fadeIn 0.5s ease-out forwards;
+  --animate-fade-in-up: fadeInUp 0.6s ease-out forwards;
+  --animate-spin-slow: spin 3s linear infinite;
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+body {
+  @apply bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
+}
+
+.glass {
+  @apply bg-light-surface/20 dark:bg-dark-surface/20 backdrop-blur-lg border border-white/20;
+}
+
+.btn-primary {
+  @apply px-6 py-3 rounded-full font-bold transition-all duration-300 transform hover:scale-105 active:scale-95;
+  @apply bg-light-primary text-white dark:bg-dark-primary dark:text-dark-bg;
+}
+
+.card {
+  @apply p-6 rounded-2xl transition-all duration-300;
+  @apply bg-light-surface shadow-lg dark:bg-dark-surface dark:shadow-none;
+}
