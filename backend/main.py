@@ -39,7 +39,7 @@ async def generate_story(request: GenerateStoryRequest):
         "scenes": [
             {
                 "text": "Once upon a time, in a world far away...",
-                "image": "https://images.unsplash.com/photo-1464802686167-b939a67e0b24?auto=format&fit=crop&w=800&q=80"
+                "image": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80"
             },
             {
                 "text": "An adventurer set out on a grand quest to find the lost pixels.",
