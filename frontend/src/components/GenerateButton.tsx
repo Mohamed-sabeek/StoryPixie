@@ -4,15 +4,17 @@ interface GenerateButtonProps {
   onClick: () => void;
   isLoading: boolean;
   text: string;
+  disabled?: boolean;
 }
 
-const GenerateButton: React.FC<GenerateButtonProps> = ({ onClick, isLoading, text }) => {
+const GenerateButton: React.FC<GenerateButtonProps> = ({ onClick, isLoading, text, disabled = false }) => {
+  const isDisabled = isLoading || disabled;
   return (
     <button
       onClick={onClick}
-      disabled={isLoading}
+      disabled={isDisabled}
       className={`btn-primary flex items-center justify-center gap-2 min-w-[200px] ${
-        isLoading ? 'opacity-70 cursor-not-allowed' : ''
+        isDisabled ? 'opacity-50 cursor-not-allowed' : ''
       }`}
     >
       {isLoading ? (

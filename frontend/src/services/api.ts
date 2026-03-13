@@ -1,22 +1,40 @@
-import axios from 'axios';
+import axios from "axios";
+import { Story } from "../components/StoryViewer";
 
-import { Story } from '../components/StoryViewer';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
-export const generateStory = async (prompt: string): Promise<Story> => {
+/**
+ * Generate story from backend AI
+ */
+export const generateStory = async (data: any) => {
   try {
-    const response = await api.post('/generate-story', { prompt });
+    const payload = {
+      prompt: data.prompt,
+      genre: data.genre,
+      scenes: data.scenes,
+      length: data.length,
+      image_style: data.imageStyle,
+      voice: data.voice,
+      mood: data.mood
+    };
+
+    console.log("Sending payload to backend:", payload);
+
+    const response = await api.post("/generate-story", payload);
+
+    console.log("Received story from backend:", response.data);
+
     return response.data;
   } catch (error) {
-    console.error('Error generating story:', error);
+    console.error("Error generating story from backend:", error);
     throw error;
   }
 };

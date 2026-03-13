@@ -39,6 +39,7 @@ export default function Home(): React.JSX.Element {
           onClick={handleGenerate} 
           isLoading={false} 
           text="Start Storytelling" 
+          disabled={prompt.trim() === ""}
         />
         
         <div className="flex flex-row flex-wrap justify-center items-center gap-3 w-full max-w-4xl mt-8">

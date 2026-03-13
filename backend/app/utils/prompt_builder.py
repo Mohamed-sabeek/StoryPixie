@@ -1,25 +1,52 @@
-class PromptBuilder:
-    @staticmethod
-    def build_story_prompt(user_prompt: str) -> str:
-        return f"""
-        Generate a creative and engaging story based on the follow prompt: "{user_prompt}"
-        
-        The story should be broken into 3 to 5 distinct scenes.
-        For each scene, provide:
-        1. story text: A descriptive paragraph of what happens in this scene.
-        2. imagePrompt: A detailed prompt for an AI image generator to visualize this scene.
-        3. narration text: A shorter version of the story text suitable for voice narration.
-        
-        Return the result ONLY as a JSON object with the following structure:
-        {{
-            "title": "Story Title",
-            "scenes": [
-                {{
-                    "scene": 1,
-                    "text": "...",
-                    "imagePrompt": "...",
-                    "narration": "..."
-                }}
-            ]
-        }}
-        """
+def build_story_prompt(prompt, genre, scenes, length, image_style, voice, mood):
+    return f"""
+You are an expert AI storyteller.
+
+Write a {genre} story.
+
+Story mood: {mood}
+
+Number of scenes: {scenes}
+
+Narration length: {length}
+
+Each scene must include:
+- scene_number
+- title
+- narration
+- image_prompt
+
+Image style: {image_style}
+
+Story idea:
+{prompt}
+
+IMPORTANT RULES:
+1. Return ONLY valid JSON.
+2. Do NOT include explanations or markdown.
+3. The number of scenes MUST be exactly {scenes}.
+4. The response must strictly follow the JSON structure below.
+
+Required JSON format:
+
+{{
+  "title": "Story title",
+  "scenes": [
+    {{
+      "scene_number": 1,
+      "title": "Scene title",
+      "narration": "Narration describing what happens in the scene",
+      "image_prompt": "Detailed description for generating the scene image in {image_style} style"
+    }},
+    {{
+      "scene_number": 2,
+      "title": "Scene title",
+      "narration": "Narration describing what happens in the scene",
+      "image_prompt": "Detailed description for generating the scene image in {image_style} style"
+    }}
+  ]
+}}
+
+Remember:
+Return ONLY JSON.
+"""

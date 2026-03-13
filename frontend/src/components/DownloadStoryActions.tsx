@@ -28,70 +28,48 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
       pdf.text(titleLines, pageWidth / 2, yPosition, { align: 'center' });
       yPosition += titleLines.length * 10 + 10;
 
-      // Add Scenes
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'normal');
+      // Add Content (Scenes or Plain Text)
+      if (story.scenes && story.scenes.length > 0) {
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'normal');
 
-      for (let i = 0; i < story.scenes.length; i++) {
-        const scene = story.scenes[i];
-        
-        // Add text
-        const textLines = pdf.splitTextToSize(`Scene ${i + 1}: ${scene.text}`, pageWidth - 2 * margin);
-        
-        // Check page break for text
-        if (yPosition + textLines.length * 7 > pdf.internal.pageSize.getHeight() - margin) {
-          pdf.addPage();
-          yPosition = margin;
+        for (let i = 0; i < story.scenes.length; i++) {
+          const scene = story.scenes[i];
+          
+          // Add text
+          const textLines = pdf.splitTextToSize(`Scene ${i + 1}: ${scene.narration}`, pageWidth - 2 * margin);
+          
+          // Check page break for text
+          if (yPosition + textLines.length * 7 > pdf.internal.pageSize.getHeight() - margin) {
+            pdf.addPage();
+            yPosition = margin;
+          }
+          
+          pdf.text(textLines, margin, yPosition);
+          yPosition += textLines.length * 7 + 10;
         }
+      } else if (story.story_text) {
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'normal');
+        const storyLines = pdf.splitTextToSize(story.story_text, pageWidth - 2 * margin);
         
-        pdf.text(textLines, margin, yPosition);
-        yPosition += textLines.length * 7 + 10;
-
-        // Add Image if exists
-        if (scene.image) {
-          try {
-            // Load image as base64 to add to PDF
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            
-            const base64Data = await new Promise<string>((resolve, reject) => {
-              img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                  ctx.drawImage(img, 0, 0);
-                  resolve(canvas.toDataURL('image/jpeg'));
-                } else {
-                  reject(new Error('Failed to get canvas context'));
-                }
-              };
-              img.onerror = reject;
-              img.src = scene.image;
-            });
-
-            // Calculate image dimensions to fit page (max width 170mm, max height 100mm)
-            const maxImgWidth = pageWidth - 2 * margin;
-            const maxImgHeight = 100;
-            const imgProps = pdf.getImageProperties(base64Data);
-            const ratio = Math.min(maxImgWidth / imgProps.width, maxImgHeight / imgProps.height);
-            const pdfWidth = imgProps.width * ratio;
-            const pdfHeight = imgProps.height * ratio;
-
-            // Check page break for image
-            if (yPosition + pdfHeight > pdf.internal.pageSize.getHeight() - margin) {
-              pdf.addPage();
-              yPosition = margin;
-            }
-
-            // Center image
-            const xPosition = (pageWidth - pdfWidth) / 2;
-            pdf.addImage(base64Data, 'JPEG', xPosition, yPosition, pdfWidth, pdfHeight);
-            yPosition += pdfHeight + 20;
-
-          } catch (imgError) {
-            console.error(`Failed to load image for scene ${i + 1}`, imgError);
+        // Handle multi-page plain text
+        let lineIndex = 0;
+        const pageHeight = pdf.internal.pageSize.getHeight() - margin;
+        
+        while (lineIndex < storyLines.length) {
+          const linesForPage = [];
+          while (lineIndex < storyLines.length && yPosition + 7 < pageHeight) {
+            linesForPage.push(storyLines[lineIndex]);
+            lineIndex++;
+            yPosition += 7;
+          }
+          
+          pdf.text(linesForPage, margin, yPosition - (linesForPage.length * 7));
+          
+          if (lineIndex < storyLines.length) {
+            pdf.addPage();
+            yPosition = margin;
           }
         }
       }
@@ -113,12 +91,12 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
 
       if (!imgFolder) throw new Error("Could not create ZIP folder");
 
-      const promises = story.scenes.map(async (scene, index) => {
-        if (!scene.image) return;
+      const promises = (story.scenes || []).map(async (scene, index) => {
+        if (!scene.image_prompt || true) return; // Images not yet implemented
         try {
-          const response = await fetch(scene.image);
+          const response = await fetch(scene.image_prompt);
           const blob = await response.blob();
-          imgFolder.file(`scene_${index + 1}.jpg`, blob);
+          imgFolder!.file(`scene_${index + 1}.jpg`, blob);
         } catch (err) {
           console.error(`Failed to fetch image ${index + 1}:`, err);
         }
@@ -137,13 +115,26 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
   };
 
   const downloadMedia = async (url: string, filename: string) => {
+    // If it's an external URL (like our mock data), opening in a new tab is the most reliable fallback
+    // Since fetch() will throw a CORS TypeError before it even reaches the catch block if the server doesn't allow it.
+    if (url.startsWith('http')) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+
     try {
       const response = await fetch(url);
       const blob = await response.blob();
       saveAs(blob, filename);
     } catch (error) {
       console.error(`Error downloading ${filename}:`, error);
-      // Fallback: Open in new tab if CORS prevents direct fetching
       const a = document.createElement('a');
       a.href = url;
       a.target = '_blank';
@@ -182,7 +173,7 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
         {/* Images ZIP Download */}
         <button
           onClick={downloadImages}
-          disabled={isImagesLoading || story.scenes.filter(s => s.image).length === 0}
+          disabled={isImagesLoading || !story.scenes || story.scenes.length === 0}
           className="flex flex-col items-center justify-center p-6 card hover:ring-2 hover:ring-light-primary dark:hover:ring-dark-primary transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isImagesLoading ? (
@@ -197,7 +188,7 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
 
         {/* Video Download */}
         <button
-          onClick={() => downloadMedia(story.video, `${getSafeTitle()}_video.mp4`)}
+          onClick={() => downloadMedia(story.video || '', `${getSafeTitle()}_video.mp4`)}
           disabled={!story.video}
           className="flex flex-col items-center justify-center p-6 card hover:ring-2 hover:ring-light-primary dark:hover:ring-dark-primary transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -209,7 +200,7 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
 
         {/* Audio Download */}
         <button
-           onClick={() => downloadMedia(story.audio, `${getSafeTitle()}_audio.mp3`)}
+           onClick={() => downloadMedia(story.audio || '', `${getSafeTitle()}_audio.mp3`)}
            disabled={!story.audio}
           className="flex flex-col items-center justify-center p-6 card hover:ring-2 hover:ring-light-primary dark:hover:ring-dark-primary transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
         >
