@@ -19,7 +19,7 @@ async def generate_complete_story(request):
         print("[Story Service] Prompt built successfully")
 
         # Call Gemini service
-        story = await generate_story(prompt)
+        story = await generate_story(prompt, image_style_prompt=request.image_style)
 
         if not story:
             raise HTTPException(

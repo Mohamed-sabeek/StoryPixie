@@ -12,9 +12,8 @@ class StoryRequest(BaseModel):
 
 class Scene(BaseModel):
     scene_number: int
-    title: str
-    narration: str
-    image_prompt: str
+    text: str
+    image: str = None  # Base64 string or URL
 
 class StoryResponse(BaseModel):
     title: str

@@ -1,22 +1,20 @@
 from google import genai
 from app.config.settings import settings
+from app.services.image_service import generate_scene_image
 import json
 import re
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-async def generate_story(prompt: str):
-    # Determine the title from the prompt
+async def generate_story(prompt: str, image_style_prompt: str = None):
+    # Determine the title from the prompt for the response object
     display_title = prompt
-    
-    # 1. Try to extract content after "story idea:"
     marker = "story idea:"
     if marker in prompt.lower():
         start_index = prompt.lower().find(marker) + len(marker)
         display_title = prompt[start_index:].strip()
     
     # 2. Robustly clean the title by removing common instruction keywords
-    # This prevents leaked instructions like "important rules:" from appearing in the title
     instruction_keywords = [
         r"important rules.*",
         r"instructions.*",
@@ -27,68 +25,70 @@ async def generate_story(prompt: str):
     ]
     
     for kw in instruction_keywords:
-        # Case-insensitive split at the keyword and take the prefix
         parts = re.split(kw, display_title, flags=re.IGNORECASE)
         if parts:
             display_title = parts[0].strip()
     
-    # Clean up trailing punctuation or spaces left after splitting
     display_title = re.sub(r"[:\-\s]+$", "", display_title)
-
-    # 3. Final formatting: Capitalize and truncate if too long
     if len(display_title) > 50:
         display_title = display_title[:47] + "..."
     display_title = display_title.capitalize() if display_title else "AI Story"
 
     try:
+        # Use a prompt that ensures we get clear paras for scenes
+        story_prompt = f"""
+        You are a creative storyteller. Write an engaging story based on this idea: {display_title}.
+        
+        Format the story into exactly {settings.SCENE_COUNT} distinct paragraphs.
+        Each paragraph should represent a clear scene in the story.
+        
+        Return ONLY the story text. No titles, no labels, no JSON.
+        """
+
         response = client.models.generate_content(
             model=settings.GEMINI_MODEL_NAME,
-            contents=prompt
+            contents=story_prompt
         )
 
         text = response.text
-
-        # Try to convert JSON story to plain text
-        try:
-            # 1. Strip markdown code blocks if present
-            cleaned_text = text.strip()
-            if "```" in cleaned_text:
-                json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned_text, re.DOTALL)
-                if json_match:
-                    cleaned_text = json_match.group(1)
+        
+        # Split text into paragraphs (scenes)
+        paragraphs = [p.strip() for p in re.split(r'\n\n+', text) if p.strip()]
+        
+        # Limit to SCENE_COUNT
+        paragraphs = paragraphs[:settings.SCENE_COUNT]
+        
+        scenes = []
+        style = image_style_prompt or settings.IMAGE_STYLE
+        
+        for i, para in enumerate(paragraphs):
+            # Create a descriptive image prompt
+            image_prompt = f"{para}, {style}, highly detailed cinematic digital art"
             
-            # 2. If it's still not valid JSON, try to find the first '{' and last '}'
-            try:
-                data = json.loads(cleaned_text)
-            except json.JSONDecodeError:
-                json_block_match = re.search(r"({.*})", cleaned_text, re.DOTALL)
-                if json_block_match:
-                    data = json.loads(json_block_match.group(1))
-                else:
-                    raise ValueError("No JSON block found")
-
-            # 3. Format the story text from the JSON structure
-            title = data.get("title", "")
-            scenes = data.get("scenes", [])
-
-            story = title + "\n\n"
-            for scene in scenes:
-                if isinstance(scene, dict) and "narration" in scene:
-                    story += scene.get("narration", "") + "\n\n"
-
-            text = story.strip()
-
-        except:
-            # If parsing fails for any reason, return the raw text (or whatever survived)
-            pass
+            # Generate image for the scene
+            image_data = generate_scene_image(image_prompt)
+            
+            scenes.append({
+                "scene_number": i + 1,
+                "text": para,
+                "image": image_data
+            })
 
         return {
             "title": display_title,
-            "story_text": text
+            "scenes": scenes
         }
 
     except Exception as e:
+        # Fallback empty scenes with error msg in first one if necessary, 
+        # or just return error structure
         return {
             "title": display_title,
-            "story_text": f"Error generating story: {str(e)}"
+            "scenes": [
+                {
+                    "scene_number": 1,
+                    "text": f"Error generating story: {str(e)}",
+                    "image": None
+                }
+            ]
         }
