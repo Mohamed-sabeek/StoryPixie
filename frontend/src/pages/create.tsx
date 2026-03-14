@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
 import StoryGenerator, { StoryConfig } from '../components/StoryGenerator';
 import GenerationProgress from '../components/GenerationProgress';
-import LoadingSpinner from '../components/LoadingSpinner';
 import StoryViewer from '../components/StoryViewer';
 import { Story } from '../components/StoryViewer';
 import { generateStory } from '../services/api';
@@ -17,6 +16,7 @@ export default function CreateStory() {
   const [isLoading, setIsLoading] = useState(false);
   const [story, setStory] = useState<Story | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historyNotice, setHistoryNotice] = useState<string | null>(null);
   const { saveStory } = useStoryHistory();
 
   useEffect(() => {
@@ -31,6 +31,7 @@ export default function CreateStory() {
     // Set loading state immediately for visual feedback
     setIsLoading(true);
     setError(null);
+    setHistoryNotice(null);
     setStory(null);
     setLastConfig(config);
 
@@ -48,7 +49,11 @@ export default function CreateStory() {
       setStory(storyData);
       
       if (storyData && !storyData.error) {
-        saveStory(config.prompt, storyData);
+        try {
+          await saveStory(config.prompt, storyData);
+        } catch {
+          setHistoryNotice('Story generated successfully, but saving to Firestore history failed.');
+        }
       }
     } catch (err) {
       console.error("Story generation failed:", err);
@@ -91,6 +96,11 @@ export default function CreateStory() {
 
         {story && (
           <div className="w-full flex flex-col items-center">
+            {historyNotice && (
+              <div className="mb-6 max-w-3xl w-full rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-800">
+                {historyNotice}
+              </div>
+            )}
             <StoryViewer story={story} />
             <DownloadStoryActions story={story} />
             <div className="mt-12 flex gap-4">

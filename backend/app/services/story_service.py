@@ -8,8 +8,15 @@ async def generate_complete_story(request):
         # Get scene count safely
         scene_count = getattr(request, "scene_count", 3)
 
-        # Build AI prompt
-        prompt = build_story_prompt(
+        # Enforce supported scene count values for strong consistency
+        if scene_count not in (3, 5, 7, 10):
+            raise HTTPException(
+                status_code=400,
+                detail="scene_count must be one of [3, 5, 7, 10]"
+            )
+
+        # Build AI prompt and preserve user prompt for response display
+        ai_prompt = build_story_prompt(
             request.prompt,
             request.genre,
             scene_count,
@@ -21,8 +28,13 @@ async def generate_complete_story(request):
 
         print("[Story Service] Prompt built successfully")
 
-        # Call Gemini service
-        story = await generate_story(prompt, image_style_prompt=request.image_style, scene_count=scene_count)
+        # Call Gemini service with separate user prompt and structurally compliant AI instructions
+        story = await generate_story(
+            user_prompt=request.prompt,
+            ai_prompt=ai_prompt,
+            image_style_prompt=request.image_style,
+            scene_count=scene_count
+        )
 
         if not story:
             raise HTTPException(

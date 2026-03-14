@@ -2,11 +2,48 @@ import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import StoryViewer from '../components/StoryViewer';
 import DownloadStoryActions from '../components/DownloadStoryActions';
-import { useStoryHistory, SavedStory } from '../hooks/useStoryHistory';
+import { SavedStory, useStoryHistory } from '../hooks/useStoryHistory';
 
 export default function HistoryPage() {
-  const { stories, isLoaded, deleteStory, clearHistory } = useStoryHistory();
+  const { stories, isLoaded, error, getStory, deleteStory, clearHistory } = useStoryHistory();
   const [selectedStory, setSelectedStory] = useState<SavedStory | null>(null);
+  const [isStoryLoading, setIsStoryLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleSelectStory = async (storyId: string) => {
+    try {
+      setActionError(null);
+      setIsStoryLoading(true);
+      const fullStory = await getStory(storyId);
+      setSelectedStory(fullStory);
+    } catch {
+      setActionError('Failed to load the selected story.');
+    } finally {
+      setIsStoryLoading(false);
+    }
+  };
+
+  const handleDeleteStory = async (storyId: string) => {
+    try {
+      setActionError(null);
+      await deleteStory(storyId);
+      if (selectedStory?.id === storyId) {
+        setSelectedStory(null);
+      }
+    } catch {
+      setActionError('Failed to delete the selected story.');
+    }
+  };
+
+  const handleClearHistory = async () => {
+    try {
+      setActionError(null);
+      await clearHistory();
+      setSelectedStory(null);
+    } catch {
+      setActionError('Failed to clear story history.');
+    }
+  };
 
   if (!isLoaded) {
     return (
@@ -21,6 +58,12 @@ export default function HistoryPage() {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 lg:px-8 animate-fade-in-up">
+        {(error || actionError) && (
+          <div className="mb-8 rounded-2xl border border-red-300 bg-red-50 px-5 py-4 text-red-700">
+            {actionError || error}
+          </div>
+        )}
+
         {selectedStory ? (
           <div>
             <button
@@ -32,8 +75,16 @@ export default function HistoryPage() {
               </svg>
               Back to History
             </button>
-            <StoryViewer story={selectedStory} />
-            <DownloadStoryActions story={selectedStory} />
+            {isStoryLoading ? (
+              <div className="flex justify-center items-center min-h-[40vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-light-primary dark:border-dark-primary"></div>
+              </div>
+            ) : (
+              <>
+                <StoryViewer story={selectedStory} />
+                <DownloadStoryActions story={selectedStory} />
+              </>
+            )}
           </div>
         ) : (
           <div>
@@ -41,7 +92,7 @@ export default function HistoryPage() {
               <h1 className="text-4xl font-black">Story History</h1>
               {stories.length > 0 && (
                 <button
-                  onClick={clearHistory}
+                  onClick={handleClearHistory}
                   className="px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium text-sm"
                 >
                   Clear History
@@ -61,15 +112,29 @@ export default function HistoryPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {stories.map((story) => (
-                  <div key={story.id} className="card flex flex-col items-start hover:-translate-y-1 hover:shadow-xl cursor-pointer group" onClick={() => setSelectedStory(story)}>
+                  <div
+                    key={story.id}
+                    className="card flex flex-col items-start hover:-translate-y-1 hover:shadow-xl cursor-pointer group"
+                    onClick={() => handleSelectStory(story.id)}
+                  >
+                    {story.image_urls?.[0] ? (
+                      <div className="mb-4 h-48 w-full overflow-hidden rounded-2xl bg-gray-100">
+                        <img
+                          src={story.image_urls[0]}
+                          alt={story.title}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
+
                     <div className="w-full flex justify-between items-start mb-4">
                       <h3 className="text-xl font-bold line-clamp-1 group-hover:text-light-primary dark:group-hover:text-dark-primary transition-colors">
                         {story.title}
                       </h3>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteStory(story.id);
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          await handleDeleteStory(story.id);
                         }}
                         className="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                         title="Delete story"
@@ -79,11 +144,11 @@ export default function HistoryPage() {
                         </svg>
                       </button>
                     </div>
-                    
+
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 line-clamp-3 flex-grow">
                       "{story.prompt}"
                     </p>
-                    
+
                     <div className="text-xs text-gray-500 w-full flex justify-between items-center border-t border-gray-100 dark:border-gray-800 pt-4">
                       <span>{new Date(story.createdAt).toLocaleDateString()}</span>
                       <span className="text-light-primary dark:text-dark-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">

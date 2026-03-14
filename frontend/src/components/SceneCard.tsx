@@ -4,6 +4,9 @@ interface Scene {
   scene_number: number;
   text: string;
   image: string | null;
+  image_url?: string | null;
+  title?: string;
+  narration?: string;
 }
 
 const SceneCard: React.FC<{ scene: Scene; index: number }> = ({ scene, index }) => {
@@ -28,7 +31,7 @@ const SceneCard: React.FC<{ scene: Scene; index: number }> = ({ scene, index }) 
       </div>
 
       {/* RIGHT SIDE: IMAGE CONTENT */}
-      <div className="flex-1 md:max-w-[400px] w-full">
+      <div className="flex-1 md:max-w-100 w-full">
         <div className="relative group shadow-xl rounded-2xl overflow-hidden bg-gray-100 dark:bg-dark-surface border border-gray-200 dark:border-gray-800 transition-all duration-500 hover:shadow-2xl">
           {scene.image ? (
             <img 

@@ -39,7 +39,8 @@ venv.bak/
 # =========================================
 .env
 .env.*
-.env*.local
+.env.local
+.env.*.local
 
 # =========================================
 # Logs
@@ -73,31 +74,30 @@ Thumbs.db
 .netlify
 
 # =========================================
-# AI / Tools
+# Firebase / Google Cloud
 # =========================================
-.gemini/
-.antigravityignore
-
-# =========================================
-# Security / Secrets
-# =========================================
-
-# Firebase / Google Cloud keys
 firebase_key.json
 backend/firebase_key.json
 serviceAccountKey.json
 google-credentials.json
 gcloud-service-key.json
+firebase-debug.log
 
-# Private keys
+# =========================================
+# Private Keys / Certificates
+# =========================================
 *.pem
 *.key
 *.p12
 *.p8
-
-# Certificates
 *.crt
 *.cer
+
+# =========================================
+# AI / Tools
+# =========================================
+.gemini/
+.antigravityignore
 
 # =========================================
 # Temporary / Debug Files
@@ -106,13 +106,18 @@ gcloud-service-key.json
 *.temp
 debug.log
 gemini_debug.log
-gemini_debug.log
-list_models_new.py
-debug_sdk.py
 
 # =========================================
-# Uploads / Generated Files
+# Generated StoryPixie Files
 # =========================================
 uploads/
 generated_images/
 story_images/
+storybook_exports/
+zip_exports/
+
+# =========================================
+# Misc
+# =========================================
+*.bak
+*.swp
