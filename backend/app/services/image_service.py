@@ -1,5 +1,5 @@
 import base64
-import time
+import asyncio
 from google import genai
 from app.config.settings import settings
 from app.core.logger import logger
@@ -10,7 +10,7 @@ client = genai.Client(api_key=settings.GEMINI_API_KEY)
 MAX_IMAGE_RETRIES = 3
 RETRY_DELAYS_SECONDS = (2, 4, 6)
 
-def generate_scene_image(prompt: str):
+async def generate_scene_image(prompt: str):
     """
     Generates an image for a story scene using Google's Imagen model.
     Uploads to Firebase for persistence and returns both inline data and the storage URL.
@@ -19,7 +19,8 @@ def generate_scene_image(prompt: str):
 
     for attempt in range(1, MAX_IMAGE_RETRIES + 1):
         try:
-            response = client.models.generate_images(
+            response = await asyncio.to_thread(
+                client.models.generate_images,
                 model=settings.IMAGE_MODEL_NAME,
                 prompt=prompt,
                 config={
@@ -31,7 +32,7 @@ def generate_scene_image(prompt: str):
                 image_bytes = response.generated_images[0].image.image_bytes
 
                 # Keep the Firebase upload for persistence, but do not depend on it for frontend access.
-                image_url = upload_image(image_bytes)
+                image_url = await asyncio.to_thread(upload_image, image_bytes)
                 if image_url:
                     logger.info(f"Image uploaded successfully: {image_url}")
                 else:
@@ -50,7 +51,7 @@ def generate_scene_image(prompt: str):
         if attempt < MAX_IMAGE_RETRIES:
             delay = RETRY_DELAYS_SECONDS[min(attempt - 1, len(RETRY_DELAYS_SECONDS) - 1)]
             logger.info(f"Retrying image generation in {delay} seconds...")
-            time.sleep(delay)
+            await asyncio.sleep(delay)
 
     logger.error("Image generation failed after all retry attempts.")
     return None

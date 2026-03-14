@@ -6,7 +6,7 @@ import StoryGenerator, { StoryConfig } from '../components/StoryGenerator';
 import GenerationProgress from '../components/GenerationProgress';
 import StoryViewer from '../components/StoryViewer';
 import { Story } from '../components/StoryViewer';
-import { generateStory } from '../services/api';
+import { cancelStoryGeneration, generateStory } from '../services/api';
 import { useStoryHistory } from '../hooks/useStoryHistory';
 import DownloadStoryActions from '../components/DownloadStoryActions';
 
@@ -20,6 +20,7 @@ export default function CreateStory() {
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
   const { saveStory } = useStoryHistory();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const generationIdRef = useRef<string | null>(null);
 
   const sleepWithAbort = (ms: number, signal: AbortSignal) =>
     new Promise<void>((resolve, reject) => {
@@ -67,6 +68,8 @@ export default function CreateStory() {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    const generationId = crypto.randomUUID();
+    generationIdRef.current = generationId;
 
     // Set loading state immediately for visual feedback
     setIsLoading(true);
@@ -82,7 +85,10 @@ export default function CreateStory() {
       // and ensure the user feels the "Start" action was registered
       await sleepWithAbort(800, controller.signal);
 
-      const storyData = await generateStory(config, controller.signal);
+      const storyData = await generateStory(
+        { ...config, generationId },
+        controller.signal
+      );
 
       console.log("Received story from backend:", storyData);
 
@@ -113,20 +119,33 @@ export default function CreateStory() {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
+      if (generationIdRef.current === generationId) {
+        generationIdRef.current = null;
+      }
       setIsLoading(false);
     }
   };
 
-  const stopGeneration = () => {
+  const stopGeneration = async () => {
     const controller = abortControllerRef.current;
+    const generationId = generationIdRef.current;
     abortControllerRef.current = null;
+    generationIdRef.current = null;
 
-    if (!controller) {
+    if (!controller && !generationId) {
       return;
     }
 
+    if (generationId) {
+      try {
+        await cancelStoryGeneration(generationId);
+      } catch {
+        // Best-effort server-side cancellation.
+      }
+    }
+
     try {
-      controller.abort();
+      controller?.abort();
     } catch {
       // Aborting an already-cancelled request should be a no-op for the UI.
     }
@@ -134,6 +153,9 @@ export default function CreateStory() {
 
   useEffect(() => {
     return () => {
+      if (generationIdRef.current) {
+        void cancelStoryGeneration(generationIdRef.current).catch(() => undefined);
+      }
       abortControllerRef.current?.abort();
     };
   }, []);

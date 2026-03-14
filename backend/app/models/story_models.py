@@ -3,12 +3,17 @@ from typing import List, Optional
 
 class StoryRequest(BaseModel):
     prompt: str = Field(..., example="A dragon protecting a lost kingdom")
+    generation_id: Optional[str] = None
     genre: str
     scene_count: Optional[int] = 3
     length: str
     image_style: str
     voice: str
     mood: str
+
+
+class CancelGenerationRequest(BaseModel):
+    generation_id: str
 
 class Scene(BaseModel):
     scene_number: int

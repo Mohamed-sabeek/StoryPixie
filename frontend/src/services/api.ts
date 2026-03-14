@@ -18,6 +18,7 @@ export const generateStory = async (data: any, signal?: AbortSignal) => {
   try {
     const payload = {
       prompt: data.prompt,
+      generation_id: data.generationId,
       genre: data.genre,
       scene_count: data.scenes,
       length: data.length,
@@ -47,6 +48,12 @@ export const generateStory = async (data: any, signal?: AbortSignal) => {
     console.error("Error generating story from backend:", error);
     throw error;
   }
+};
+
+export const cancelStoryGeneration = async (generationId: string) => {
+  await api.post("/cancel-generation", {
+    generation_id: generationId,
+  });
 };
 
 export default api;
