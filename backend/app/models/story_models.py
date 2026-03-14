@@ -15,11 +15,22 @@ class StoryRequest(BaseModel):
 class CancelGenerationRequest(BaseModel):
     generation_id: str
 
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "female"
+
+
+class TTSResponse(BaseModel):
+    audio: str
+    mime_type: str
+
 class Scene(BaseModel):
     scene_number: int
     text: str
     image: str = None  # Base64 string or URL
     image_url: Optional[str] = None
+    audio: Optional[str] = None
 
 class StoryResponse(BaseModel):
     title: str

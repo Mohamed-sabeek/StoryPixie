@@ -3,7 +3,6 @@ import GenreSelector from './selectors/GenreSelector';
 import SceneSelector from './selectors/SceneSelector';
 import LengthSelector from './selectors/LengthSelector';
 import ImageStyleSelector from './selectors/ImageStyleSelector';
-import VoiceSelector from './selectors/VoiceSelector';
 import MoodSelector from './selectors/MoodSelector';
 
 interface StoryControlsProps {
@@ -15,8 +14,6 @@ interface StoryControlsProps {
   setLength: (val: string) => void;
   imageStyle: string;
   setImageStyle: (val: string) => void;
-  voice: string;
-  setVoice: (val: string) => void;
   mood: string;
   setMood: (val: string) => void;
 }
@@ -26,7 +23,6 @@ export default function StoryControls({
   scenes, setScenes,
   length, setLength,
   imageStyle, setImageStyle,
-  voice, setVoice,
   mood, setMood
 }: StoryControlsProps) {
   return (
@@ -35,7 +31,6 @@ export default function StoryControls({
       <SceneSelector value={scenes} onChange={setScenes} />
       <LengthSelector value={length} onChange={setLength} />
       <ImageStyleSelector value={imageStyle} onChange={setImageStyle} />
-      <VoiceSelector value={voice} onChange={setVoice} />
       <MoodSelector value={mood} onChange={setMood} />
     </div>
   );

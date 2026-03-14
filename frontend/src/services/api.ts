@@ -56,4 +56,28 @@ export const cancelStoryGeneration = async (generationId: string) => {
   });
 };
 
+export const generateSceneSpeech = async (text: string, voice: "male" | "female") => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/tts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        voice,
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.warn("Backend TTS request failed, falling back to browser speech.");
+    return null;
+  }
+};
+
 export default api;

@@ -8,9 +8,7 @@ interface VoiceSelectorProps {
 
 const voices = [
   'Male Narrator',
-  'Female Narrator',
-  'Child Voice',
-  'Storyteller Voice'
+  'Female Narrator'
 ];
 
 export default function VoiceSelector({ value, onChange }: VoiceSelectorProps) {
@@ -21,7 +19,7 @@ export default function VoiceSelector({ value, onChange }: VoiceSelectorProps) {
       onChange={onChange}
       options={voices.map(voice => ({ 
         label: voice, 
-        value: voice.toLowerCase().replace(' ', '_') 
+        value: voice.toLowerCase().replace(/\s+/g, '_') 
       }))}
     />
   );

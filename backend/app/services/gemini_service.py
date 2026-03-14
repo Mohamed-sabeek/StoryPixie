@@ -208,7 +208,8 @@ Continue until Scene {scene_count}. Do not return JSON.
                 "narration": scene["narration"],
                 "text": scene["text"],
                 "image": image_data.get("inline_data"),
-                "image_url": image_data.get("storage_url")
+                "image_url": image_data.get("storage_url"),
+                "audio": None,
             })
 
             if scene["scene_number"] < len(parsed_scenes):

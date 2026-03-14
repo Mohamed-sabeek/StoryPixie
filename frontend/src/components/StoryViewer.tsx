@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import SceneCard from './SceneCard';
 
 export interface Scene {
@@ -6,6 +6,7 @@ export interface Scene {
   text: string;
   image: string | null;
   image_url?: string | null;
+  audio?: string | null;
   title?: string;
   narration?: string;
 }
@@ -21,6 +22,150 @@ export interface Story {
 }
 
 export default function StoryViewer({ story }: { story: Story | null }) {
+  const [selectedVoice, setSelectedVoice] = useState<'male' | 'female'>('female');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [playingSceneNumber, setPlayingSceneNumber] = useState<number | null>(null);
+  const [loadingSceneNumber, setLoadingSceneNumber] = useState<number | null>(null);
+  const [highlightedSceneNumber, setHighlightedSceneNumber] = useState<number | null>(null);
+  const [highlightedText, setHighlightedText] = useState<string>('');
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+  const highlightFallbackTimeoutRef = useRef<number | null>(null);
+  const boundaryDetectedRef = useRef(false);
+  const selectedVoiceRef = useRef<'male' | 'female'>('female');
+
+  const clearHighlightTimers = () => {
+    if (highlightTimerRef.current) {
+      window.clearInterval(highlightTimerRef.current);
+      highlightTimerRef.current = null;
+    }
+    if (highlightFallbackTimeoutRef.current) {
+      window.clearTimeout(highlightFallbackTimeoutRef.current);
+      highlightFallbackTimeoutRef.current = null;
+    }
+  };
+
+  const getHighlightEndIndex = (text: string, charIndex: number) => {
+    if (charIndex >= text.length) {
+      return text.length;
+    }
+
+    const remainingText = text.slice(charIndex);
+    const wordMatch = remainingText.match(/^\S+\s*/);
+    return Math.min(text.length, charIndex + (wordMatch?.[0].length || 1));
+  };
+
+  useEffect(() => {
+    if (!window.speechSynthesis) {
+      return;
+    }
+
+    const syncVoices = () => {
+      setAvailableVoices(window.speechSynthesis.getVoices());
+    };
+
+    syncVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', syncVoices);
+
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.removeEventListener('voiceschanged', syncVoices);
+      }
+      utteranceRef.current = null;
+      clearHighlightTimers();
+    };
+  }, []);
+
+  const setVoiceSelection = (voice: 'male' | 'female') => {
+    selectedVoiceRef.current = voice;
+    setSelectedVoice(voice);
+  };
+
+  const getPreferredVoice = (voice: 'male' | 'female') => {
+    const malePatterns = [
+      /male/i,
+      /david/i,
+      /guy/i,
+      /mark/i,
+      /james/i,
+      /brian/i,
+      /ravi/i,
+      /steffan/i,
+      /ryan/i,
+      /andrew/i,
+      /christopher/i,
+      /daniel/i,
+      /george/i,
+      /liam/i,
+      /alex/i,
+      /aaron/i,
+      /roger/i,
+      /thomas/i,
+      /paul/i,
+      /michael/i,
+      /nathan/i,
+    ];
+    const femalePatterns = [
+      /female/i,
+      /zira/i,
+      /susan/i,
+      /aria/i,
+      /jenny/i,
+      /samantha/i,
+      /heera/i,
+      /priya/i,
+      /hazel/i,
+      /ava/i,
+      /emma/i,
+      /linda/i,
+      /nancy/i,
+      /sonia/i,
+      /sara/i,
+      /victoria/i,
+      /katya/i,
+    ];
+    const voicePatterns = voice === 'male' ? malePatterns : femalePatterns;
+
+    const currentVoices = window.speechSynthesis?.getVoices() || availableVoices;
+    const englishVoices = currentVoices.filter((voiceOption) =>
+      /^en(-|_)?/i.test(voiceOption.lang || '')
+    );
+    const searchPools = [
+      englishVoices.filter((voiceOption) => voiceOption.localService),
+      englishVoices,
+      currentVoices.filter((voiceOption) => voiceOption.localService),
+      currentVoices,
+    ];
+
+    for (const searchPool of searchPools) {
+      for (const pattern of voicePatterns) {
+        const matchedVoice = searchPool.find((voiceOption) =>
+          pattern.test(`${voiceOption.name} ${voiceOption.voiceURI}`)
+        );
+        if (matchedVoice) {
+          return matchedVoice;
+        }
+      }
+    }
+
+    if (voice === 'male') {
+      for (const searchPool of searchPools) {
+        const nonFemaleVoice = searchPool.find(
+          (voiceOption) =>
+            !femalePatterns.some((pattern) =>
+              pattern.test(`${voiceOption.name} ${voiceOption.voiceURI}`)
+            )
+        );
+        if (nonFemaleVoice) {
+          return nonFemaleVoice;
+        }
+      }
+    }
+
+    return searchPools.find((pool) => pool.length > 0)?.[0] || null;
+  };
+
   if (!story) {
     return (
       <div className="text-center py-20">
@@ -29,6 +174,117 @@ export default function StoryViewer({ story }: { story: Story | null }) {
       </div>
     );
   }
+
+  const handlePlayAudio = async (scene: Scene) => {
+    const stopCurrentPlayback = () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      utteranceRef.current = null;
+      boundaryDetectedRef.current = false;
+      clearHighlightTimers();
+      setPlayingSceneNumber(null);
+      setHighlightedSceneNumber(null);
+      setHighlightedText('');
+    };
+
+    if (playingSceneNumber === scene.scene_number) {
+      stopCurrentPlayback();
+      return;
+    }
+
+    stopCurrentPlayback();
+    setLoadingSceneNumber(scene.scene_number);
+    setPlayingSceneNumber(scene.scene_number);
+    setHighlightedSceneNumber(scene.scene_number);
+    setHighlightedText('');
+
+    try {
+      if (window.speechSynthesis) {
+        const narrationText = scene.narration || scene.text;
+        const utterance = new SpeechSynthesisUtterance(narrationText);
+        utteranceRef.current = utterance;
+
+        window.speechSynthesis.cancel();
+        const matchingVoice = getPreferredVoice(selectedVoiceRef.current);
+
+        if (matchingVoice) {
+          utterance.voice = matchingVoice;
+          utterance.lang = matchingVoice.lang;
+        }
+
+        utterance.rate = 0.95;
+        utterance.pitch = selectedVoiceRef.current === 'male' ? 0.78 : 1.04;
+        boundaryDetectedRef.current = false;
+
+        utterance.onboundary = (event) => {
+          if (typeof event.charIndex === 'number') {
+            boundaryDetectedRef.current = true;
+            clearHighlightTimers();
+            const highlightEndIndex = getHighlightEndIndex(narrationText, event.charIndex);
+            setHighlightedSceneNumber(scene.scene_number);
+            setHighlightedText(narrationText.slice(0, highlightEndIndex));
+          }
+        };
+
+        highlightFallbackTimeoutRef.current = window.setTimeout(() => {
+          if (boundaryDetectedRef.current) {
+            return;
+          }
+
+          const words = narrationText.match(/\S+\s*/g) || [];
+          let wordIndex = 0;
+          const fallbackIntervalMs = Math.max(320, Math.round(430 / utterance.rate));
+
+          highlightTimerRef.current = window.setInterval(() => {
+            if (wordIndex >= words.length) {
+              clearHighlightTimers();
+              return;
+            }
+
+            wordIndex += 1;
+            const spokenWordCount = Math.min(wordIndex, words.length);
+            const spokenText = words.slice(0, spokenWordCount).join('');
+            setHighlightedSceneNumber(scene.scene_number);
+            setHighlightedText(spokenText);
+          }, fallbackIntervalMs);
+        }, 1200);
+
+        utterance.onend = () => {
+          utteranceRef.current = null;
+          boundaryDetectedRef.current = false;
+          clearHighlightTimers();
+          setPlayingSceneNumber(null);
+          setHighlightedSceneNumber(scene.scene_number);
+          setHighlightedText(narrationText);
+        };
+
+        utterance.onerror = () => {
+          utteranceRef.current = null;
+          boundaryDetectedRef.current = false;
+          clearHighlightTimers();
+          setPlayingSceneNumber(null);
+          setHighlightedSceneNumber(null);
+          setHighlightedText('');
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setPlayingSceneNumber(null);
+        setHighlightedSceneNumber(null);
+        setHighlightedText('');
+      }
+    } catch (error) {
+      console.error('Failed to generate or play TTS audio:', error);
+      boundaryDetectedRef.current = false;
+      clearHighlightTimers();
+      setPlayingSceneNumber(null);
+      setHighlightedSceneNumber(null);
+      setHighlightedText('');
+    } finally {
+      setLoadingSceneNumber(null);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto py-12 px-4 w-full">
@@ -39,13 +295,57 @@ export default function StoryViewer({ story }: { story: Story | null }) {
         <div className="w-24 h-2 bg-light-primary dark:bg-dark-primary mx-auto rounded-full"></div>
       </header>
 
+      {story.scenes && story.scenes.length > 0 && (
+        <div className="mb-10 flex justify-center">
+          <div className="inline-flex items-center gap-4 rounded-full border border-gray-200 bg-white px-6 py-3 shadow-sm dark:border-gray-800 dark:bg-dark-surface">
+                <span className="text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Voice
+            </span>
+            <div className="inline-flex rounded-full bg-gray-100 p-1 dark:bg-dark-bg/60">
+              <button
+                type="button"
+                onClick={() => setVoiceSelection('female')}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  selectedVoice === 'female'
+                    ? 'bg-light-primary text-white dark:bg-dark-primary dark:text-dark-bg'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                Female
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceSelection('male')}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  selectedVoice === 'male'
+                    ? 'bg-light-primary text-white dark:bg-dark-primary dark:text-dark-bg'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                Male
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-12 items-start">
         {/* LEFT SIDE: STORY SCENES */}
         <div className="flex-1 w-full space-y-8 order-2 lg:order-1">
           {story.scenes && story.scenes.length > 0 ? (
             <div className="space-y-4">
               {story.scenes.map((scene, index) => (
-                <SceneCard key={index} scene={scene} index={index} />
+                <SceneCard
+                  key={index}
+                  scene={scene}
+                  index={index}
+                  onPlayAudio={handlePlayAudio}
+                  isPlaying={playingSceneNumber === scene.scene_number}
+                  isLoadingAudio={loadingSceneNumber === scene.scene_number}
+                  highlightedText={
+                    highlightedSceneNumber === scene.scene_number ? highlightedText : null
+                  }
+                />
               ))}
             </div>
           ) : (

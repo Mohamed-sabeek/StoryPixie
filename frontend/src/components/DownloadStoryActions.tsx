@@ -71,6 +71,73 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
       reader.readAsDataURL(blob);
     });
 
+  const inferImageFormat = (mimeType: string, dataUrl?: string) => {
+    if (/png/i.test(mimeType) || dataUrl?.startsWith('data:image/png')) {
+      return 'PNG';
+    }
+
+    if (/jpe?g/i.test(mimeType) || dataUrl?.startsWith('data:image/jpeg')) {
+      return 'JPEG';
+    }
+
+    if (/webp/i.test(mimeType) || dataUrl?.startsWith('data:image/webp')) {
+      return 'WEBP';
+    }
+
+    return null;
+  };
+
+  const loadImageElement = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Failed to load image'));
+      image.src = src;
+    });
+
+  const rasterizeImageBlob = async (blob: Blob) => {
+    const objectUrl = URL.createObjectURL(blob);
+
+    try {
+      const image = await loadImageElement(objectUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth || image.width || 1200;
+      canvas.height = image.naturalHeight || image.height || 1200;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        throw new Error('Failed to create canvas context');
+      }
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      return canvas.toDataURL('image/png');
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  const getPdfReadyImage = async (blob: Blob) => {
+    const directDataUrl = await blobToDataUrl(blob);
+    const directFormat = inferImageFormat(blob.type, directDataUrl);
+
+    if (directFormat) {
+      return {
+        dataUrl: directDataUrl,
+        format: directFormat as 'PNG' | 'JPEG' | 'WEBP',
+      };
+    }
+
+    const rasterizedDataUrl = await rasterizeImageBlob(blob);
+
+    return {
+      dataUrl: rasterizedDataUrl,
+      format: 'PNG' as const,
+    };
+  };
+
   const downloadPDF = async () => {
     setIsPdfLoading(true);
     try {
@@ -121,8 +188,8 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
         if (scene.image) {
           const sceneBlob = await getSceneImageBlob(scene.image);
           if (sceneBlob) {
-            const sceneImageData = await blobToDataUrl(sceneBlob);
-            const imageProps = pdf.getImageProperties(sceneImageData);
+            const pdfReadyImage = await getPdfReadyImage(sceneBlob);
+            const imageProps = pdf.getImageProperties(pdfReadyImage.dataUrl);
             const imageAspectRatio = imageProps.width / imageProps.height;
             let imageWidth = contentWidth;
             let imageHeight = imageWidth / imageAspectRatio;
@@ -139,8 +206,8 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
             pdf.roundedRect(imageX - 2, cursorY - 2, imageWidth + 4, imageHeight + 4, 3, 3, 'FD');
 
             pdf.addImage(
-              sceneImageData,
-              imageProps.fileType || 'PNG',
+              pdfReadyImage.dataUrl,
+              pdfReadyImage.format,
               imageX,
               cursorY,
               imageWidth,

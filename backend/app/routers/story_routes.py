@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from app.models.story_models import CancelGenerationRequest, StoryRequest
+from app.models.story_models import CancelGenerationRequest, StoryRequest, TTSRequest
 from app.core.cancellation import GenerationCancelled
 from app.core.generation_registry import cancel_generation
 from app.services.story_service import generate_complete_story
+from app.services.tts_service import generate_speech
 
 router = APIRouter()
 
@@ -25,3 +26,8 @@ async def generate_story(request: Request, payload: StoryRequest):
 async def cancel_story_generation(payload: CancelGenerationRequest):
     cancel_generation(payload.generation_id)
     return {"status": "cancelled", "generation_id": payload.generation_id}
+
+
+@router.post("/tts")
+async def generate_tts(payload: TTSRequest):
+    return await generate_speech(payload.text, payload.voice)

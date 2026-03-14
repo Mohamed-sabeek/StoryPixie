@@ -92,8 +92,6 @@ export default function StoryGenerator({
         setLength={setLength}
         imageStyle={imageStyle}
         setImageStyle={setImageStyle}
-        voice={voice}
-        setVoice={setVoice}
         mood={mood}
         setMood={setMood}
       />

@@ -15,6 +15,13 @@ async def generate_scene_image(prompt: str):
     Generates an image for a story scene using Google's Imagen model.
     Uploads to Firebase for persistence and returns both inline data and the storage URL.
     """
+    if not settings.ENABLE_IMAGE_GENERATION:
+        logger.info("Image generation disabled. Returning placeholder asset instead of calling Imagen.")
+        return {
+            "inline_data": settings.IMAGE_PLACEHOLDER_PATH,
+            "storage_url": settings.IMAGE_PLACEHOLDER_PATH,
+        }
+
     logger.info(f"Generating image for prompt: {prompt[:50]}...")
 
     for attempt in range(1, MAX_IMAGE_RETRIES + 1):
