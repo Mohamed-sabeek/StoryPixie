@@ -6,7 +6,7 @@ import re
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-async def generate_story(prompt: str, image_style_prompt: str = None):
+async def generate_story(prompt: str, image_style_prompt: str = None, scene_count: int = 3):
     # Determine the title from the prompt for the response object
     display_title = prompt
     marker = "story idea:"
@@ -14,7 +14,7 @@ async def generate_story(prompt: str, image_style_prompt: str = None):
         start_index = prompt.lower().find(marker) + len(marker)
         display_title = prompt[start_index:].strip()
     
-    # 2. Robustly clean the title by removing common instruction keywords
+    # ... (cleaning logic remains identical)
     instruction_keywords = [
         r"important rules.*",
         r"instructions.*",
@@ -39,7 +39,7 @@ async def generate_story(prompt: str, image_style_prompt: str = None):
         story_prompt = f"""
         You are a creative storyteller. Write an engaging story based on this idea: {display_title}.
         
-        Format the story into exactly {settings.SCENE_COUNT} distinct paragraphs.
+        Format the story into exactly {scene_count} distinct paragraphs.
         Each paragraph should represent a clear scene in the story.
         
         Return ONLY the story text. No titles, no labels, no JSON.
@@ -55,8 +55,8 @@ async def generate_story(prompt: str, image_style_prompt: str = None):
         # Split text into paragraphs (scenes)
         paragraphs = [p.strip() for p in re.split(r'\n\n+', text) if p.strip()]
         
-        # Limit to SCENE_COUNT
-        paragraphs = paragraphs[:settings.SCENE_COUNT]
+        # Limit to scene_count
+        paragraphs = paragraphs[:scene_count]
         
         scenes = []
         style = image_style_prompt or settings.IMAGE_STYLE

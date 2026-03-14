@@ -5,11 +5,14 @@ from fastapi import HTTPException
 
 async def generate_complete_story(request):
     try:
+        # Get scene count safely
+        scene_count = getattr(request, "scene_count", 3)
+
         # Build AI prompt
         prompt = build_story_prompt(
             request.prompt,
             request.genre,
-            request.scenes,
+            scene_count,
             request.length,
             request.image_style,
             request.voice,
@@ -19,7 +22,7 @@ async def generate_complete_story(request):
         print("[Story Service] Prompt built successfully")
 
         # Call Gemini service
-        story = await generate_story(prompt, image_style_prompt=request.image_style)
+        story = await generate_story(prompt, image_style_prompt=request.image_style, scene_count=scene_count)
 
         if not story:
             raise HTTPException(

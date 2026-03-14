@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
 class StoryRequest(BaseModel):
     prompt: str = Field(..., example="A dragon protecting a lost kingdom")
     genre: str
-    scenes: int
+    scene_count: Optional[int] = 3
     length: str
     image_style: str
     voice: str

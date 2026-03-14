@@ -19,7 +19,7 @@ export const generateStory = async (data: any) => {
     const payload = {
       prompt: data.prompt,
       genre: data.genre,
-      scenes: data.scenes,
+      scene_count: data.scenes,
       length: data.length,
       image_style: data.imageStyle,
       voice: data.voice,
