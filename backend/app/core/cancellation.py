@@ -1,0 +1,2 @@
+class GenerationCancelled(Exception):
+    pass

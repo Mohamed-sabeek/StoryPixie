@@ -77,10 +77,10 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 18;
+      const margin = 16;
       const contentWidth = pageWidth - margin * 2;
-      const sceneImageMaxHeight = 78;
-      const bodyLineHeight = 7;
+      const sceneImageMaxHeight = 92;
+      const bodyLineHeight = 6.5;
 
       if (!story.scenes || story.scenes.length === 0) {
         pdf.setFillColor(255, 255, 255);
@@ -109,42 +109,51 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
         let cursorY = margin - 2;
 
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(11);
+        pdf.setFontSize(10);
         pdf.text(story.title, margin, cursorY);
-        cursorY += 10;
+        cursorY += 9;
 
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(20);
+        pdf.setFontSize(18);
         pdf.text(`Scene ${scene.scene_number}`, margin, cursorY);
-        cursorY += 10;
+        cursorY += 8;
 
         if (scene.image) {
           const sceneBlob = await getSceneImageBlob(scene.image);
           if (sceneBlob) {
             const sceneImageData = await blobToDataUrl(sceneBlob);
             const imageProps = pdf.getImageProperties(sceneImageData);
-            const imageWidth = contentWidth;
-            const imageHeight = Math.min(
-              (imageProps.height * imageWidth) / imageProps.width,
-              sceneImageMaxHeight
-            );
+            const imageAspectRatio = imageProps.width / imageProps.height;
+            let imageWidth = contentWidth;
+            let imageHeight = imageWidth / imageAspectRatio;
+
+            if (imageHeight > sceneImageMaxHeight) {
+              imageHeight = sceneImageMaxHeight;
+              imageWidth = imageHeight * imageAspectRatio;
+            }
+
+            const imageX = margin + (contentWidth - imageWidth) / 2;
+
+            pdf.setDrawColor(226, 232, 240);
+            pdf.setFillColor(248, 250, 252);
+            pdf.roundedRect(imageX - 2, cursorY - 2, imageWidth + 4, imageHeight + 4, 3, 3, 'FD');
 
             pdf.addImage(
               sceneImageData,
               imageProps.fileType || 'PNG',
-              margin,
+              imageX,
               cursorY,
               imageWidth,
               imageHeight,
               undefined,
               'FAST'
             );
-            cursorY += imageHeight + 10;
+            cursorY += imageHeight + 12;
           }
         }
 
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(12);
+        pdf.setFontSize(11);
         const textLines = pdf.splitTextToSize(scene.narration || scene.text || '', contentWidth);
         const linesPerPage = Math.max(1, Math.floor((pageHeight - cursorY - margin) / bodyLineHeight));
 
@@ -159,11 +168,11 @@ const DownloadStoryActions: React.FC<DownloadProps> = ({ story }) => {
             pdf.setFillColor(255, 255, 255);
             pdf.rect(0, 0, pageWidth, pageHeight, 'F');
             pdf.setFont('helvetica', 'bold');
-            pdf.setFontSize(16);
+            pdf.setFontSize(15);
             pdf.text(`Scene ${scene.scene_number} (cont.)`, margin, margin);
             pdf.setFont('helvetica', 'normal');
-            pdf.setFontSize(12);
-            cursorY = margin + 10;
+            pdf.setFontSize(11);
+            cursorY = margin + 9;
           }
         }
       }

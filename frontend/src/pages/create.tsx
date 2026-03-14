@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import axios from 'axios';
 import Layout from '../components/Layout';
 import StoryGenerator, { StoryConfig } from '../components/StoryGenerator';
 import GenerationProgress from '../components/GenerationProgress';
@@ -18,6 +19,27 @@ export default function CreateStory() {
   const [error, setError] = useState<string | null>(null);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
   const { saveStory } = useStoryHistory();
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const sleepWithAbort = (ms: number, signal: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        cleanup();
+        resolve();
+      }, ms);
+
+      const cleanup = () => {
+        window.clearTimeout(timeoutId);
+        signal.removeEventListener('abort', handleAbort);
+      };
+
+      const handleAbort = () => {
+        cleanup();
+        reject(new DOMException('Generation cancelled by user.', 'AbortError'));
+      };
+
+      signal.addEventListener('abort', handleAbort);
+    });
 
   useEffect(() => {
     if (router.query.prompt) {
@@ -27,7 +49,25 @@ export default function CreateStory() {
     }
   }, [router.query.prompt]);
 
+  useEffect(() => {
+    if (error !== 'Story generation stopped.') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setError((currentError) =>
+        currentError === 'Story generation stopped.' ? null : currentError
+      );
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [error]);
+
   const handleGenerateConfig = async (config: StoryConfig) => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     // Set loading state immediately for visual feedback
     setIsLoading(true);
     setError(null);
@@ -40,9 +80,9 @@ export default function CreateStory() {
       
       // Artificial short delay to let the enter animation play out beautifully
       // and ensure the user feels the "Start" action was registered
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await sleepWithAbort(800, controller.signal);
 
-      const storyData = await generateStory(config);
+      const storyData = await generateStory(config, controller.signal);
 
       console.log("Received story from backend:", storyData);
 
@@ -56,12 +96,47 @@ export default function CreateStory() {
         }
       }
     } catch (err) {
+      if (
+        controller.signal.aborted ||
+        err instanceof DOMException && err.name === 'AbortError' ||
+        axios.isCancel(err) ||
+        (axios.isAxiosError(err) && err.code === 'ERR_CANCELED') ||
+        (axios.isAxiosError(err) && err.message === 'Network Error' && controller.signal.aborted)
+      ) {
+        setError('Story generation stopped.');
+        return;
+      }
+
       console.error("Story generation failed:", err);
       setError('Oops! Something went wrong while weaving your story. Please try again.');
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setIsLoading(false);
     }
   };
+
+  const stopGeneration = () => {
+    const controller = abortControllerRef.current;
+    abortControllerRef.current = null;
+
+    if (!controller) {
+      return;
+    }
+
+    try {
+      controller.abort();
+    } catch {
+      // Aborting an already-cancelled request should be a no-op for the UI.
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const retryGeneration = () => {
     if (lastConfig) {
@@ -80,7 +155,7 @@ export default function CreateStory() {
           />
         )}
 
-        {isLoading && <GenerationProgress />}
+        {isLoading && <GenerationProgress onCancel={stopGeneration} />}
 
         {error && (
           <div className="card border-red-500 border-2 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 p-6 flex flex-col items-center">

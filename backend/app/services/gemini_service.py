@@ -1,9 +1,17 @@
 from google import genai
 from app.config.settings import settings
 from app.services.image_service import generate_scene_image
+from app.core.cancellation import GenerationCancelled
+from app.core.logger import logger
 import re
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+
+async def _raise_if_cancelled(disconnect_checker=None):
+    if disconnect_checker and await disconnect_checker():
+        logger.info("Stopping generation after client disconnect.")
+        raise GenerationCancelled()
 
 
 def _parse_story_text(raw_text: str, fallback_title: str, scene_count: int):
@@ -37,8 +45,10 @@ def _parse_story_text(raw_text: str, fallback_title: str, scene_count: int):
     scenes.sort(key=lambda scene: scene["scene_number"])
     return title, scenes
 
-async def generate_story(user_prompt: str, ai_prompt: str = None, image_style_prompt: str = None, scene_count: int = 3):
+async def generate_story(user_prompt: str, ai_prompt: str = None, image_style_prompt: str = None, scene_count: int = 3, disconnect_checker=None):
     try:
+        await _raise_if_cancelled(disconnect_checker)
+
         # 1. Generate a cinematic title from the raw user prompt
         title_prompt = f"Based on this story idea: '{user_prompt}', generate a short, cinematic, catchy story title (under 8 words). Return ONLY the title text."
         title_response = client.models.generate_content(
@@ -70,6 +80,7 @@ Continue until Scene {scene_count}. Do not return JSON.
             model=settings.GEMINI_MODEL_NAME,
             contents=story_instructions
         )
+        await _raise_if_cancelled(disconnect_checker)
 
         text = response.text.strip()
         parsed_title, parsed_scenes = _parse_story_text(text, display_title, scene_count)
@@ -122,6 +133,7 @@ Continue until Scene {scene_count}. Do not return JSON.
 
         scenes = []
         for scene in parsed_scenes:
+            await _raise_if_cancelled(disconnect_checker)
             image_prompt = f"{scene['text']}, in a {style} style, highly detailed cinematic artwork"
             image_data = generate_scene_image(image_prompt) or {}
             scenes.append({
@@ -140,6 +152,8 @@ Continue until Scene {scene_count}. Do not return JSON.
             "prompt": user_prompt
         }
 
+    except GenerationCancelled:
+        raise
     except Exception as e:
         return {
             "title": "A StoryPixie Tale",

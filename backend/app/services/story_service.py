@@ -1,10 +1,19 @@
 from app.utils.prompt_builder import build_story_prompt
 from app.services.gemini_service import generate_story
 from fastapi import HTTPException
+from app.core.cancellation import GenerationCancelled
+from app.core.logger import logger
+
+async def _raise_if_cancelled(disconnect_checker=None):
+    if disconnect_checker and await disconnect_checker():
+        logger.info("Story generation cancelled by disconnected client.")
+        raise GenerationCancelled()
 
 
-async def generate_complete_story(request):
+async def generate_complete_story(request, disconnect_checker=None):
     try:
+        await _raise_if_cancelled(disconnect_checker)
+
         # Get scene count safely
         scene_count = getattr(request, "scene_count", 3)
 
@@ -27,13 +36,15 @@ async def generate_complete_story(request):
         )
 
         print("[Story Service] Prompt built successfully")
+        await _raise_if_cancelled(disconnect_checker)
 
         # Call Gemini service with separate user prompt and structurally compliant AI instructions
         story = await generate_story(
             user_prompt=request.prompt,
             ai_prompt=ai_prompt,
             image_style_prompt=request.image_style,
-            scene_count=scene_count
+            scene_count=scene_count,
+            disconnect_checker=disconnect_checker
         )
 
         if not story:
@@ -46,6 +57,8 @@ async def generate_complete_story(request):
 
         return story
 
+    except GenerationCancelled:
+        raise
     except Exception as e:
         print("[Story Service] Error generating story:", str(e))
 
