@@ -50,20 +50,36 @@ async def generate_story(prompt: str):
 
         # Try to convert JSON story to plain text
         try:
-            data = json.loads(text)
+            # 1. Strip markdown code blocks if present
+            cleaned_text = text.strip()
+            if "```" in cleaned_text:
+                json_match = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned_text, re.DOTALL)
+                if json_match:
+                    cleaned_text = json_match.group(1)
+            
+            # 2. If it's still not valid JSON, try to find the first '{' and last '}'
+            try:
+                data = json.loads(cleaned_text)
+            except json.JSONDecodeError:
+                json_block_match = re.search(r"({.*})", cleaned_text, re.DOTALL)
+                if json_block_match:
+                    data = json.loads(json_block_match.group(1))
+                else:
+                    raise ValueError("No JSON block found")
 
+            # 3. Format the story text from the JSON structure
             title = data.get("title", "")
             scenes = data.get("scenes", [])
 
             story = title + "\n\n"
-
             for scene in scenes:
-                story += scene["narration"] + "\n\n"
+                if isinstance(scene, dict) and "narration" in scene:
+                    story += scene.get("narration", "") + "\n\n"
 
-            text = story
+            text = story.strip()
 
         except:
-            # If it's already text, keep it
+            # If parsing fails for any reason, return the raw text (or whatever survived)
             pass
 
         return {
