@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { signInAnonymously, User } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import {
   addDoc,
   collection,
@@ -14,7 +14,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { Scene, Story } from '../components/StoryViewer';
-import { auth, db, isFirebaseConfigured } from '../lib/firebase';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 
 export interface SavedStory extends Story {
   id: string;
@@ -64,6 +64,8 @@ const toScene = (scene: Record<string, unknown>): Scene => normalizeScene({
   text: typeof scene.text === 'string' ? scene.text : '',
   image: typeof scene.image === 'string' ? scene.image : null,
   image_url: typeof scene.image_url === 'string' ? scene.image_url : null,
+  audio: typeof scene.audio === 'string' ? scene.audio : null,
+  audio_url: typeof scene.audio_url === 'string' ? scene.audio_url : null,
   title: typeof scene.title === 'string' ? scene.title : undefined,
   narration: typeof scene.narration === 'string' ? scene.narration : undefined,
 });
@@ -106,6 +108,8 @@ const buildFirestoreStory = (prompt: string, story: Story): FirestoreStoryDocume
     text: scene.text,
     title: scene.title,
     narration: scene.narration,
+    audio_url:
+      scene.audio_url || (scene.audio && !scene.audio.startsWith('data:') ? scene.audio : null),
     image: scene.image_url || null,
     image_url: scene.image_url || null,
   }));
@@ -123,6 +127,16 @@ const buildFirestoreStory = (prompt: string, story: Story): FirestoreStoryDocume
   });
 };
 
+const getCurrentUser = () => {
+  const user = getAuth().currentUser;
+
+  if (!user) {
+    throw new Error('User must be logged in to access story history.');
+  }
+
+  return user;
+};
+
 const getStoriesCollection = (userId: string) => {
   if (!db) {
     throw new Error('Firebase Firestore is not configured.');
@@ -135,28 +149,14 @@ export const useStoryHistory = () => {
   const [stories, setStories] = useState<SavedStory[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
-  const ensureAuthenticatedUser = useCallback(async (): Promise<User> => {
-    if (!auth) {
-      throw new Error('Firebase Authentication is not configured.');
-    }
-
-    if (auth.currentUser) {
-      return auth.currentUser;
-    }
-
-    const credential = await signInAnonymously(auth);
-    return credential.user;
-  }, []);
-
-  const loadStories = useCallback(async (currentUserId?: string) => {
-    const resolvedUserId = currentUserId || userId;
-    if (!resolvedUserId) {
+  const loadStories = useCallback(async () => {
+    const user = getAuth().currentUser;
+    if (!user) {
+      setStories([]);
       return [];
     }
-
-    const storiesRef = getStoriesCollection(resolvedUserId);
+    const storiesRef = getStoriesCollection(user.uid);
     const snapshot = await getDocs(query(storiesRef, orderBy('created_at', 'desc')));
     const loadedStories = snapshot.docs
       .map((storyDoc) => mapFirestoreStory(storyDoc.id, storyDoc.data() as FirestoreStoryDocument))
@@ -164,20 +164,19 @@ export const useStoryHistory = () => {
 
     setStories(loadedStories);
     return loadedStories;
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     const initializeHistory = async () => {
-      if (!isFirebaseConfigured || !auth || !db) {
+      if (!isFirebaseConfigured || !db) {
         setError('Firebase is not configured. Add the public Firebase env vars to use story history.');
         setIsLoaded(true);
         return;
       }
 
       try {
-        const user = await ensureAuthenticatedUser();
-        setUserId(user.uid);
-        await loadStories(user.uid);
+        await loadStories();
+        setError(null);
       } catch (firestoreError) {
         console.error('Failed to initialize Firestore story history:', firestoreError);
         setError('Failed to connect to StoryPixie history.');
@@ -186,14 +185,13 @@ export const useStoryHistory = () => {
       }
     };
 
-    initializeHistory();
-  }, [ensureAuthenticatedUser, loadStories]);
+    void initializeHistory();
+  }, [loadStories]);
 
   const saveStory = useCallback(async (prompt: string, storyParams: Story) => {
     try {
-      const user = await ensureAuthenticatedUser();
-      setUserId(user.uid);
-
+      const user = getCurrentUser();
+      console.log('Saving story for user:', user.uid);
       const storiesRef = getStoriesCollection(user.uid);
       const storyDoc = await addDoc(storiesRef, buildFirestoreStory(prompt, storyParams));
       const snapshot = await getDoc(storyDoc);
@@ -214,13 +212,11 @@ export const useStoryHistory = () => {
       setError('The story was generated, but saving it to history failed.');
       throw firestoreError;
     }
-  }, [ensureAuthenticatedUser]);
+  }, []);
 
   const getStory = useCallback(async (storyId: string) => {
     try {
-      const user = await ensureAuthenticatedUser();
-      setUserId(user.uid);
-
+      const user = getCurrentUser();
       const storyRef = doc(getStoriesCollection(user.uid), storyId);
       const snapshot = await getDoc(storyRef);
       const loadedStory = mapFirestoreStory(
@@ -239,13 +235,11 @@ export const useStoryHistory = () => {
       setError('Failed to load the selected story.');
       throw firestoreError;
     }
-  }, [ensureAuthenticatedUser]);
+  }, []);
 
   const deleteStory = useCallback(async (storyId: string) => {
     try {
-      const user = await ensureAuthenticatedUser();
-      setUserId(user.uid);
-
+      const user = getCurrentUser();
       await deleteDoc(doc(getStoriesCollection(user.uid), storyId));
       setStories((previousStories) => previousStories.filter((story) => story.id !== storyId));
       setError(null);
@@ -254,13 +248,11 @@ export const useStoryHistory = () => {
       setError('Failed to delete the selected story.');
       throw firestoreError;
     }
-  }, [ensureAuthenticatedUser]);
+  }, []);
 
   const clearHistory = useCallback(async () => {
     try {
-      const user = await ensureAuthenticatedUser();
-      setUserId(user.uid);
-
+      const user = getCurrentUser();
       const storiesRef = getStoriesCollection(user.uid);
       const snapshot = await getDocs(storiesRef);
       const batch = writeBatch(db!);
@@ -277,13 +269,12 @@ export const useStoryHistory = () => {
       setError('Failed to clear story history.');
       throw firestoreError;
     }
-  }, [ensureAuthenticatedUser]);
+  }, []);
 
   return {
     stories,
     isLoaded,
     error,
-    userId,
     saveStory,
     getStory,
     deleteStory,

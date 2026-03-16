@@ -1,14 +1,47 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
 import StoryViewer from '../components/StoryViewer';
 import DownloadStoryActions from '../components/DownloadStoryActions';
 import { SavedStory, useStoryHistory } from '../hooks/useStoryHistory';
+import { useAuth } from '../context/AuthContext';
 
 export default function HistoryPage() {
-  const { stories, isLoaded, error, getStory, deleteStory, clearHistory } = useStoryHistory();
+  const router = useRouter();
+  const { user, loading } = useAuth();
+  const { stories, error, getStory, deleteStory, clearHistory, refreshStories } = useStoryHistory();
   const [selectedStory, setSelectedStory] = useState<SavedStory | null>(null);
+  const [narrationVoice, setNarrationVoice] = useState<'male' | 'female'>('female');
   const [isStoryLoading, setIsStoryLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!user) {
+      setIsHistoryLoading(false);
+      void router.replace('/login');
+      return;
+    }
+
+    const loadHistory = async () => {
+      try {
+        setIsHistoryLoading(true);
+        setActionError(null);
+        await refreshStories();
+      } catch (loadError) {
+        console.error('Failed to load user story history:', loadError);
+        setActionError('Failed to load story history.');
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    };
+
+    void loadHistory();
+  }, [loading, refreshStories, router, user]);
 
   const handleSelectStory = async (storyId: string) => {
     try {
@@ -45,11 +78,21 @@ export default function HistoryPage() {
     }
   };
 
-  if (!isLoaded) {
+  if (loading || isHistoryLoading) {
     return (
       <Layout>
         <div className="flex justify-center items-center min-h-[50vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-light-primary dark:border-dark-primary"></div>
+          Loading stories...
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center min-h-[50vh]">
+          Loading stories...
         </div>
       </Layout>
     );
@@ -81,8 +124,12 @@ export default function HistoryPage() {
               </div>
             ) : (
               <>
-                <StoryViewer story={selectedStory} />
-                <DownloadStoryActions story={selectedStory} />
+                <StoryViewer
+                  story={selectedStory}
+                  selectedVoice={narrationVoice}
+                  onVoiceChange={setNarrationVoice}
+                />
+                <DownloadStoryActions story={selectedStory} selectedVoice={narrationVoice} />
               </>
             )}
           </div>
@@ -103,7 +150,7 @@ export default function HistoryPage() {
             {stories.length === 0 ? (
               <div className="text-center py-20 card">
                 <p className="text-xl text-gray-500 dark:text-gray-400 mb-6">
-                  You haven't generated any stories yet.
+                  No stories found.
                 </p>
                 <a href="/create" className="btn-primary inline-block">
                   Create Your First Story
@@ -117,17 +164,21 @@ export default function HistoryPage() {
                     className="card flex flex-col items-start hover:-translate-y-1 hover:shadow-xl cursor-pointer group"
                     onClick={() => handleSelectStory(story.id)}
                   >
-                    {story.image_urls?.[0] ? (
+                    {story.image_urls.length > 0 ? (
                       <div className="mb-4 h-48 w-full overflow-hidden rounded-2xl bg-gray-100">
                         <img
                           src={story.image_urls[0]}
-                          alt={story.title}
+                          alt={`${story.title} cover`}
                           className="h-full w-full object-cover"
                         />
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="mb-4 flex h-32 w-full items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-500 dark:bg-dark-surface">
+                        No images available
+                      </div>
+                    )}
 
-                    <div className="w-full flex justify-between items-start mb-4">
+                    <div className="w-full flex justify-between items-start mb-4 gap-4">
                       <h3 className="text-xl font-bold line-clamp-1 group-hover:text-light-primary dark:group-hover:text-dark-primary transition-colors">
                         {story.title}
                       </h3>
@@ -145,7 +196,7 @@ export default function HistoryPage() {
                       </button>
                     </div>
 
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 line-clamp-3 flex-grow">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 line-clamp-3 grow">
                       "{story.prompt}"
                     </p>
 

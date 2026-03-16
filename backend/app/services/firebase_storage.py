@@ -1,36 +1,52 @@
-import firebase_admin
-from firebase_admin import credentials, storage
 import uuid
-import os
 
-# Define the path to the firebase key
-# Ensuring it's relative to the ROOT of the project where firebase_key.json is located
-FIREBASE_KEY_PATH = "firebase_key.json"
+from firebase_admin import storage
 
-# Initialize Firebase Admin SDK only once
-if not firebase_admin._apps:
-    cred = credentials.Certificate(FIREBASE_KEY_PATH)
-    firebase_admin.initialize_app(cred, {
-        "storageBucket": "storypixie-c3839.firebasestorage.app"
-    })
+from app.core.firebase_admin_client import get_firebase_app
+from app.core.logger import logger
 
-bucket = storage.bucket()
 
-def upload_image(image_bytes):
-    """
-    Uploads image bytes to Firebase Storage and returns the public URL.
-    """
+def get_bucket():
+    get_firebase_app()
+    return storage.bucket()
+
+
+def upload_bytes(file_bytes: bytes, *, folder: str, extension: str, content_type: str) -> str | None:
     try:
-        filename = f"storypixie/{uuid.uuid4()}.png"
+        bucket = get_bucket()
+        filename = f"{folder}/{uuid.uuid4()}.{extension}"
         blob = bucket.blob(filename)
-        
-        # Upload the image bytes
-        blob.upload_from_string(image_bytes, content_type="image/png")
-        
-        # Make the blob publicly viewable
+        blob.upload_from_string(file_bytes, content_type=content_type)
         blob.make_public()
-        
         return blob.public_url
-    except Exception as e:
-        print(f"Error uploading to Firebase: {str(e)}")
+    except Exception as error:
+        logger.error("Error uploading %s asset to Firebase Storage: %s", folder, error, exc_info=True)
         return None
+
+
+def upload_image(image_bytes: bytes) -> str | None:
+    return upload_bytes(
+        image_bytes,
+        folder="storypixie/images",
+        extension="png",
+        content_type="image/png",
+    )
+
+
+def upload_audio(audio_bytes: bytes, mime_type: str = "audio/wav") -> str | None:
+    extension = "wav" if "wav" in mime_type else "mp3"
+    return upload_bytes(
+        audio_bytes,
+        folder="storypixie/audio",
+        extension=extension,
+        content_type=mime_type,
+    )
+
+
+def upload_video(video_bytes: bytes) -> str | None:
+    return upload_bytes(
+        video_bytes,
+        folder="storypixie/videos",
+        extension="mp4",
+        content_type="video/mp4",
+    )

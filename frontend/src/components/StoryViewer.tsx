@@ -7,6 +7,7 @@ export interface Scene {
   image: string | null;
   image_url?: string | null;
   audio?: string | null;
+  audio_url?: string | null;
   title?: string;
   narration?: string;
 }
@@ -21,18 +22,31 @@ export interface Story {
   error?: string;
 }
 
-export default function StoryViewer({ story }: { story: Story | null }) {
-  const [selectedVoice, setSelectedVoice] = useState<'male' | 'female'>('female');
+interface StoryViewerProps {
+  story: Story | null;
+  selectedVoice?: 'male' | 'female';
+  onVoiceChange?: (voice: 'male' | 'female') => void;
+}
+
+export default function StoryViewer({
+  story,
+  selectedVoice: controlledVoice,
+  onVoiceChange,
+}: StoryViewerProps) {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const [internalSelectedVoice, setInternalSelectedVoice] = useState<'male' | 'female'>('female');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [playingSceneNumber, setPlayingSceneNumber] = useState<number | null>(null);
   const [loadingSceneNumber, setLoadingSceneNumber] = useState<number | null>(null);
   const [highlightedSceneNumber, setHighlightedSceneNumber] = useState<number | null>(null);
   const [highlightedText, setHighlightedText] = useState<string>('');
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const highlightFallbackTimeoutRef = useRef<number | null>(null);
   const boundaryDetectedRef = useRef(false);
-  const selectedVoiceRef = useRef<'male' | 'female'>('female');
+  const selectedVoice = controlledVoice ?? internalSelectedVoice;
+  const selectedVoiceRef = useRef<'male' | 'female'>(selectedVoice);
 
   const clearHighlightTimers = () => {
     if (highlightTimerRef.current) {
@@ -72,14 +86,23 @@ export default function StoryViewer({ story }: { story: Story | null }) {
         window.speechSynthesis.cancel();
         window.speechSynthesis.removeEventListener('voiceschanged', syncVoices);
       }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       utteranceRef.current = null;
       clearHighlightTimers();
     };
   }, []);
 
+  useEffect(() => {
+    selectedVoiceRef.current = selectedVoice;
+  }, [selectedVoice]);
+
   const setVoiceSelection = (voice: 'male' | 'female') => {
     selectedVoiceRef.current = voice;
-    setSelectedVoice(voice);
+    setInternalSelectedVoice(voice);
+    onVoiceChange?.(voice);
   };
 
   const getPreferredVoice = (voice: 'male' | 'female') => {
@@ -166,6 +189,8 @@ export default function StoryViewer({ story }: { story: Story | null }) {
     return searchPools.find((pool) => pool.length > 0)?.[0] || null;
   };
 
+  const getMediaUrl = (url: string) => (url.startsWith('/') ? `${apiBaseUrl}${url}` : url);
+
   if (!story) {
     return (
       <div className="text-center py-20">
@@ -179,6 +204,11 @@ export default function StoryViewer({ story }: { story: Story | null }) {
     const stopCurrentPlayback = () => {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
       }
       utteranceRef.current = null;
       boundaryDetectedRef.current = false;
@@ -200,8 +230,49 @@ export default function StoryViewer({ story }: { story: Story | null }) {
     setHighlightedText('');
 
     try {
+      const narrationText = scene.narration || scene.text;
+      const audioSource = scene.audio_url || scene.audio || null;
+
+      if (audioSource) {
+        const audio = new Audio(audioSource);
+        audioRef.current = audio;
+        setHighlightedSceneNumber(scene.scene_number);
+        setHighlightedText('');
+
+        audio.ontimeupdate = () => {
+          const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+          if (!duration) {
+            return;
+          }
+
+          const progress = Math.max(0, Math.min(1, audio.currentTime / duration));
+          const highlightLength = Math.min(
+            narrationText.length,
+            Math.round(narrationText.length * progress)
+          );
+          setHighlightedSceneNumber(scene.scene_number);
+          setHighlightedText(narrationText.slice(0, highlightLength));
+        };
+
+        audio.onended = () => {
+          audioRef.current = null;
+          setPlayingSceneNumber(null);
+          setHighlightedSceneNumber(scene.scene_number);
+          setHighlightedText(narrationText);
+        };
+
+        audio.onerror = () => {
+          audioRef.current = null;
+          setPlayingSceneNumber(null);
+          setHighlightedSceneNumber(null);
+          setHighlightedText('');
+        };
+
+        await audio.play();
+        return;
+      }
+
       if (window.speechSynthesis) {
-        const narrationText = scene.narration || scene.text;
         const utterance = new SpeechSynthesisUtterance(narrationText);
         utteranceRef.current = utterance;
 
@@ -326,6 +397,14 @@ export default function StoryViewer({ story }: { story: Story | null }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {story.video && (
+        <div className="mb-10 max-w-5xl mx-auto">
+          <video controls className="w-full rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-800">
+            <source src={getMediaUrl(story.video)} type="video/mp4" />
+          </video>
         </div>
       )}
 

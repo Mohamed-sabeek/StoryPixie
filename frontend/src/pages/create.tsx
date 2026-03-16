@@ -9,10 +9,13 @@ import { Story } from '../components/StoryViewer';
 import { cancelStoryGeneration, generateStory } from '../services/api';
 import { useStoryHistory } from '../hooks/useStoryHistory';
 import DownloadStoryActions from '../components/DownloadStoryActions';
+import { useAuth } from '../context/AuthContext';
 
 export default function CreateStory() {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [initialPrompt, setInitialPrompt] = useState('');
+  const [narrationVoice, setNarrationVoice] = useState<'male' | 'female'>('female');
   const [lastConfig, setLastConfig] = useState<StoryConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [story, setStory] = useState<Story | null>(null);
@@ -49,6 +52,12 @@ export default function CreateStory() {
       // and adjust the defaults before generating.
     }
   }, [router.query.prompt]);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      void router.replace('/login');
+    }
+  }, [loading, router, user]);
 
   useEffect(() => {
     if (error !== 'Story generation stopped.') {
@@ -166,6 +175,16 @@ export default function CreateStory() {
     }
   };
 
+  if (loading || !user) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-light-primary dark:border-dark-primary"></div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="py-12 flex flex-col items-center">
@@ -198,8 +217,12 @@ export default function CreateStory() {
                 {historyNotice}
               </div>
             )}
-            <StoryViewer story={story} />
-            <DownloadStoryActions story={story} />
+            <StoryViewer
+              story={story}
+              selectedVoice={narrationVoice}
+              onVoiceChange={setNarrationVoice}
+            />
+            <DownloadStoryActions story={story} selectedVoice={narrationVoice} />
             <div className="mt-12 flex gap-4">
               <button 
                 onClick={() => setStory(null)} 

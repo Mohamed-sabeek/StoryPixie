@@ -1,8 +1,8 @@
 import axios from "axios";
 import { Story } from "../components/StoryViewer";
+import { auth } from "../lib/firebase";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,6 +10,18 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+const getAuthHeaders = async () => {
+  const user = auth?.currentUser;
+  if (!user) {
+    throw new Error("User must be logged in to call the backend.");
+  }
+
+  const token = await user.getIdToken(true);
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+};
 
 /**
  * Generate story from backend AI
@@ -23,15 +35,14 @@ export const generateStory = async (data: any, signal?: AbortSignal) => {
       scene_count: data.scenes,
       length: data.length,
       image_style: data.imageStyle,
-      voice: data.voice,
+      voice: data.voice === "male" ? "male" : "female",
       mood: data.mood
     };
 
-    console.log("Sending payload to backend:", payload);
-
-    const response = await api.post("/generate-story", payload, { signal });
-
-    console.log("Received story from backend:", response.data);
+    const response = await api.post("/generate-story", payload, {
+      signal,
+      headers: await getAuthHeaders(),
+    });
 
     return response.data;
   } catch (error) {
@@ -45,7 +56,7 @@ export const generateStory = async (data: any, signal?: AbortSignal) => {
       throw error;
     }
 
-    console.error("Error generating story from backend:", error);
+    if (process.env.NODE_ENV !== "production") console.error("Error generating story from backend:", error);
     throw error;
   }
 };
@@ -53,15 +64,19 @@ export const generateStory = async (data: any, signal?: AbortSignal) => {
 export const cancelStoryGeneration = async (generationId: string) => {
   await api.post("/cancel-generation", {
     generation_id: generationId,
+  }, {
+    headers: await getAuthHeaders(),
   });
 };
 
 export const generateSceneSpeech = async (text: string, voice: "male" | "female") => {
   try {
-    const response = await fetch(`${API_BASE_URL}/tts`, {
+    const authHeaders = await getAuthHeaders();
+    const response = await fetch(`/api/tts`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders,
       },
       body: JSON.stringify({
         text,
@@ -74,8 +89,7 @@ export const generateSceneSpeech = async (text: string, voice: "male" | "female"
     }
 
     return await response.json();
-  } catch (error) {
-    console.warn("Backend TTS request failed, falling back to browser speech.");
+  } catch {
     return null;
   }
 };

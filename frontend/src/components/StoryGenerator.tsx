@@ -31,7 +31,7 @@ export default function StoryGenerator({
   const [scenes, setScenes] = useState<number>(3);
   const [length, setLength] = useState<string>("short");
   const [imageStyle, setImageStyle] = useState<string>("pixar_style");
-  const [voice, setVoice] = useState<string>("female_narrator");
+  const [voice, setVoice] = useState<string>("female");
   const [mood, setMood] = useState<string>("epic");
 
   // Pre-fill prompt if coming from home page

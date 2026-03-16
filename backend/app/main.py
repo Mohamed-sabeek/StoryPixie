@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.routers import story_routes, health_routes
+from app.routers import story_routes, health_routes, video_routes
 from app.config.settings import settings
 from app.core.logger import logger
 
@@ -18,16 +18,17 @@ app = FastAPI(
     title=settings.APP_NAME,
     description="Multimodal AI Storytelling Agent Backend",
     version="1.2.0",
+    debug=settings.DEBUG,
     lifespan=lifespan
 )
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Exception Handling Middleware
@@ -39,12 +40,13 @@ async def error_handling_middleware(request: Request, call_next):
         logger.error(f"Unhandled Exception: {str(e)}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"detail": "Internal Server Error. Please check logs."}
+            content={"detail": "Internal Server Error."}
         )
 
 # Include Routers
 app.include_router(health_routes.router)
 app.include_router(story_routes.router)
+app.include_router(video_routes.router)
 
 @app.get("/")
 async def root():
@@ -56,4 +58,4 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     logger.info(f"Running uvicorn on port {settings.PORT}")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG)

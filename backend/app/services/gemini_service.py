@@ -96,7 +96,14 @@ def _build_fallback_scene_image(scene_number: int, scene_title: str, scene_text:
         "storage_url": None,
     }
 
-async def generate_story(user_prompt: str, ai_prompt: str = None, image_style_prompt: str = None, scene_count: int = 3, disconnect_checker=None, generation_id=None):
+async def generate_story(
+    user_prompt: str,
+    ai_prompt: str = None,
+    image_style_prompt: str = None,
+    scene_count: int = 3,
+    disconnect_checker=None,
+    generation_id=None,
+):
     try:
         await _raise_if_cancelled(disconnect_checker, generation_id)
 
