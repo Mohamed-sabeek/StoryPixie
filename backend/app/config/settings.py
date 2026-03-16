@@ -26,9 +26,9 @@ class Settings(BaseSettings):
     IMAGE_STYLE: str = "3D animated movie style, cinematic lighting"
     SCENE_COUNT: int = 3
 
-  FRONTEND_URL: str = "http://localhost:3000"
-PRODUCTION_FRONTEND_URL: str | None = "https://story-pixie.vercel.app"
-CORS_ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://story-pixie.vercel.app"
+    FRONTEND_URL: str = "http://localhost:3000"
+    PRODUCTION_FRONTEND_URL: str | None = "https://story-pixie.vercel.app"
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,https://story-pixie.vercel.app"
     FIREBASE_STORAGE_BUCKET: str | None = None
     FIREBASE_CREDENTIALS_PATH: str | None = None
     FIREBASE_CREDENTIALS_JSON: str | None = None
